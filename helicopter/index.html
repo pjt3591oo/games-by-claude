@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helicopter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #87ceeb 0%, #4682b4 50%, #2f4f4f 100%);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            color: #ff6b35;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+
+        .info-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+
+        #gameCanvas {
+            border: 3px solid rgba(255, 107, 53, 0.5);
+            border-radius: 10px;
+            background: linear-gradient(to bottom, #87ceeb 0%, #4682b4 100%);
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            margin: 0 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .game-over-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        .game-over-modal h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #ff6b35;
+        }
+
+        .game-over-modal p {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 600px) {
+            .game-container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            #gameCanvas {
+                width: 100%;
+                max-width: 350px;
+                height: auto;
+            }
+
+            .controls button {
+                margin: 5px;
+                display: block;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🚁 Helicopter</h1>
+        
+        <div class="game-info">
+            <div class="info-item">
+                <div class="info-label">Score</div>
+                <div class="info-value" id="score">0</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Distance</div>
+                <div class="info-value" id="distance">0m</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Best</div>
+                <div class="info-value" id="bestScore">0</div>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+        <div class="controls">
+            <button onclick="startGame()" id="startBtn">Start Game</button>
+            <button onclick="pauseGame()" id="pauseBtn" style="display: none;">Pause</button>
+        </div>
+
+        <div class="instructions">
+            <p>Click and hold to lift the helicopter</p>
+            <p>Release to let it fall</p>
+            <p>Navigate through the cave without crashing!</p>
+        </div>
+    </div>
+
+    <div class="game-over-modal" id="gameOverModal">
+        <h2 id="gameOverTitle">Game Over!</h2>
+        <p>Score: <span id="finalScore">0</span></p>
+        <p>Distance: <span id="finalDistance">0</span>m</p>
+        <p>Best Score: <span id="finalBest">0</span></p>
+        <button onclick="hideModal(); startGame();">Play Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameState = {
+            running: false,
+            paused: false,
+            score: 0,
+            distance: 0,
+            bestScore: localStorage.getItem('helicopterBest') || 0
+        };
+
+        // Helicopter
+        let helicopter = {
+            x: 100,
+            y: canvas.height / 2,
+            width: 40,
+            height: 20,
+            velocity: 0,
+            thrust: 0.3,
+            gravity: 0.15,
+            maxVelocity: 6,
+            angle: 0
+        };
+
+        // Game objects
+        let walls = [];
+        let particles = [];
+        let cameraX = 0;
+
+        // Controls
+        let isThrusting = false;
+
+        // Initialize game
+        function initGame() {
+            helicopter.x = 100;
+            helicopter.y = canvas.height / 2;
+            helicopter.velocity = 0;
+            helicopter.angle = 0;
+            walls = [];
+            particles = [];
+            cameraX = 0;
+            gameState.score = 0;
+            gameState.distance = 0;
+            
+            generateWalls();
+        }
+
+        // Generate cave walls
+        function generateWalls() {
+            walls = [];
+            let topHeight = 100;
+            let bottomHeight = 100;
+            const gapSize = 120;
+            const wallWidth = 20;
+            
+            for (let x = 0; x < 5000; x += wallWidth) {
+                // Vary the wall heights smoothly
+                topHeight += (Math.random() - 0.5) * 15;
+                bottomHeight += (Math.random() - 0.5) * 15;
+                
+                // Keep walls within bounds
+                topHeight = Math.max(50, Math.min(150, topHeight));
+                bottomHeight = Math.max(50, Math.min(150, bottomHeight));
+                
+                // Ensure minimum gap
+                if (canvas.height - topHeight - bottomHeight < gapSize) {
+                    if (topHeight > bottomHeight) {
+                        topHeight = canvas.height - bottomHeight - gapSize;
+                    } else {
+                        bottomHeight = canvas.height - topHeight - gapSize;
+                    }
+                }
+                
+                // Top wall
+                walls.push({
+                    x: x,
+                    y: 0,
+                    width: wallWidth,
+                    height: topHeight,
+                    type: 'top'
+                });
+                
+                // Bottom wall
+                walls.push({
+                    x: x,
+                    y: canvas.height - bottomHeight,
+                    width: wallWidth,
+                    height: bottomHeight,
+                    type: 'bottom'
+                });
+            }
+        }
+
+        // Update helicopter
+        function updateHelicopter() {
+            // Apply thrust or gravity
+            if (isThrusting) {
+                helicopter.velocity -= helicopter.thrust;
+                helicopter.angle = Math.max(-0.3, helicopter.angle - 0.02);
+                
+                // Create thrust particles
+                if (Math.random() < 0.7) {
+                    createThrustParticles();
+                }
+            } else {
+                helicopter.velocity += helicopter.gravity;
+                helicopter.angle = Math.min(0.3, helicopter.angle + 0.015);
+            }
+            
+            // Limit velocity
+            helicopter.velocity = Math.max(-helicopter.maxVelocity, 
+                                        Math.min(helicopter.maxVelocity, helicopter.velocity));
+            
+            // Update position
+            helicopter.y += helicopter.velocity;
+            helicopter.x += 2; // Move forward
+            
+            // Update camera
+            cameraX = helicopter.x - 150;
+            
+            // Update distance
+            gameState.distance = Math.floor(helicopter.x / 10);
+            gameState.score = gameState.distance;
+        }
+
+        // Create thrust particles
+        function createThrustParticles() {
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: helicopter.x - 5 + Math.random() * 10,
+                    y: helicopter.y + helicopter.height / 2 + Math.random() * 10,
+                    vx: -2 - Math.random() * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    life: 1,
+                    decay: 0.03,
+                    color: Math.random() < 0.5 ? '#ff6600' : '#ffaa00'
+                });
+            }
+        }
+
+        // Create crash particles
+        function createCrashParticles() {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: helicopter.x + helicopter.width / 2,
+                    y: helicopter.y + helicopter.height / 2,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1,
+                    decay: 0.02,
+                    color: Math.random() < 0.5 ? '#ff0000' : '#ff6600'
+                });
+            }
+        }
+
+        // Update particles
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life -= particle.decay;
+                
+                if (particle.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // Check collisions
+        function checkCollisions() {
+            // Check wall collisions
+            for (let wall of walls) {
+                if (helicopter.x + helicopter.width > wall.x &&
+                    helicopter.x < wall.x + wall.width &&
+                    helicopter.y + helicopter.height > wall.y &&
+                    helicopter.y < wall.y + wall.height) {
+                    return true;
+                }
+            }
+            
+            // Check boundaries
+            if (helicopter.y <= 0 || helicopter.y + helicopter.height >= canvas.height) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Draw functions
+        function drawBackground() {
+            // Sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87ceeb');
+            gradient.addColorStop(1, '#4682b4');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            for (let i = 0; i < 5; i++) {
+                const cloudX = (i * 200 - cameraX * 0.2) % (canvas.width + 100);
+                drawCloud(cloudX, 50 + i * 30);
+            }
+        }
+
+        function drawCloud(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.arc(x + 20, y, 25, 0, Math.PI * 2);
+            ctx.arc(x + 40, y, 20, 0, Math.PI * 2);
+            ctx.arc(x + 20, y - 15, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawWalls() {
+            ctx.fillStyle = '#2f4f4f';
+            ctx.strokeStyle = '#1c3a3a';
+            ctx.lineWidth = 2;
+            
+            walls.forEach(wall => {
+                const wallX = wall.x - cameraX;
+                
+                if (wallX + wall.width > 0 && wallX < canvas.width) {
+                    ctx.fillRect(wallX, wall.y, wall.width, wall.height);
+                    ctx.strokeRect(wallX, wall.y, wall.width, wall.height);
+                    
+                    // Add texture
+                    ctx.fillStyle = '#1c3a3a';
+                    for (let i = 0; i < wall.height; i += 15) {
+                        ctx.fillRect(wallX + 2, wall.y + i, wall.width - 4, 2);
+                    }
+                    ctx.fillStyle = '#2f4f4f';
+                }
+            });
+        }
+
+        function drawHelicopter() {
+            const heliX = helicopter.x - cameraX;
+            const heliY = helicopter.y;
+            
+            ctx.save();
+            ctx.translate(heliX + helicopter.width / 2, heliY + helicopter.height / 2);
+            ctx.rotate(helicopter.angle);
+            
+            // Helicopter body
+            ctx.fillStyle = '#ff6b35';
+            ctx.fillRect(-helicopter.width / 2, -helicopter.height / 2, helicopter.width, helicopter.height);
+            
+            // Cockpit
+            ctx.fillStyle = '#87ceeb';
+            ctx.fillRect(-helicopter.width / 2 + 5, -helicopter.height / 2 + 3, 15, 14);
+            
+            // Tail
+            ctx.fillStyle = '#cc5429';
+            ctx.fillRect(helicopter.width / 2 - 5, -3, 15, 6);
+            
+            // Main rotor (animated)
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.lineWidth = 2;
+            const rotorSpeed = isThrusting ? 0.5 : 0.3;
+            ctx.beginPath();
+            ctx.moveTo(-25, -helicopter.height / 2 - 5);
+            ctx.lineTo(25, -helicopter.height / 2 - 5);
+            ctx.stroke();
+            
+            // Tail rotor
+            ctx.beginPath();
+            ctx.moveTo(helicopter.width / 2 + 15, -8);
+            ctx.lineTo(helicopter.width / 2 + 15, 8);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        function drawParticles() {
+            particles.forEach(particle => {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life;
+                ctx.beginPath();
+                ctx.arc(particle.x - cameraX, particle.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        function drawUI() {
+            // Distance markers
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            
+            for (let i = 0; i < 10; i++) {
+                const markerDistance = Math.floor(gameState.distance / 100) * 100 + i * 100;
+                const markerX = markerDistance * 10 - cameraX;
+                
+                if (markerX > 0 && markerX < canvas.width) {
+                    ctx.fillText(`${markerDistance}m`, markerX, 30);
+                    ctx.fillRect(markerX - 1, 35, 2, 10);
+                }
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameState.running || gameState.paused) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            updateHelicopter();
+            updateParticles();
+
+            drawBackground();
+            drawWalls();
+            drawHelicopter();
+            drawParticles();
+            drawUI();
+
+            // Check collision
+            if (checkCollisions()) {
+                gameOver();
+                return;
+            }
+
+            updateDisplay();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        function startGame() {
+            gameState.running = true;
+            gameState.paused = false;
+            
+            initGame();
+            
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            
+            gameLoop();
+        }
+
+        // Pause game
+        function pauseGame() {
+            gameState.paused = !gameState.paused;
+            document.getElementById('pauseBtn').textContent = gameState.paused ? 'Resume' : 'Pause';
+            if (!gameState.paused) {
+                gameLoop();
+            }
+        }
+
+        // Game over
+        function gameOver() {
+            gameState.running = false;
+            createCrashParticles();
+            
+            // Update best score
+            if (gameState.score > gameState.bestScore) {
+                gameState.bestScore = gameState.score;
+                localStorage.setItem('helicopterBest', gameState.bestScore);
+            }
+            
+            document.getElementById('finalScore').textContent = gameState.score;
+            document.getElementById('finalDistance').textContent = gameState.distance;
+            document.getElementById('finalBest').textContent = gameState.bestScore;
+            document.getElementById('gameOverModal').style.display = 'block';
+            
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'none';
+        }
+
+        // Update display
+        function updateDisplay() {
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('distance').textContent = gameState.distance + 'm';
+            document.getElementById('bestScore').textContent = gameState.bestScore;
+        }
+
+        // Hide modal
+        function hideModal() {
+            document.getElementById('gameOverModal').style.display = 'none';
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousedown', () => {
+            if (gameState.running && !gameState.paused) {
+                isThrusting = true;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isThrusting = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isThrusting = false;
+        });
+
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameState.running && !gameState.paused) {
+                isThrusting = true;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isThrusting = false;
+        });
+
+        // Keyboard support
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' && gameState.running && !gameState.paused) {
+                isThrusting = true;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === ' ') {
+                isThrusting = false;
+                e.preventDefault();
+            }
+        });
+
+        // Initialize display
+        updateDisplay();
+    </script>
+</body>
+</html>
