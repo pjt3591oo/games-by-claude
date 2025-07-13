@@ -286,6 +286,28 @@
                                 <p class="text-[#637c88] text-sm font-normal leading-normal">Action</p>
                             </div>
                         </div>
+
+                        <!-- Frogger -->
+                        <div class="flex flex-col gap-3 pb-3 game-card cursor-pointer hover:scale-105 transition-transform duration-200" data-game="frogger" data-category="arcade">
+                            <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
+                                <span class="text-4xl">🐸</span>
+                            </div>
+                            <div>
+                                <p class="text-[#111518] text-base font-medium leading-normal">Frogger</p>
+                                <p class="text-[#637c88] text-sm font-normal leading-normal">Arcade</p>
+                            </div>
+                        </div>
+
+                        <!-- Asteroids -->
+                        <div class="flex flex-col gap-3 pb-3 game-card cursor-pointer hover:scale-105 transition-transform duration-200" data-game="asteroids" data-category="action">
+                            <div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-xl bg-gradient-to-br from-gray-800 to-black flex items-center justify-center">
+                                <span class="text-4xl">🚀</span>
+                            </div>
+                            <div>
+                                <p class="text-[#111518] text-base font-medium leading-normal">Asteroids</p>
+                                <p class="text-[#637c88] text-sm font-normal leading-normal">Action</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -309,7 +331,9 @@
             'memory-game': { name: 'Memory Card', category: 'puzzle' },
             'space-invaders': { name: 'Space Invaders', category: 'action' },
             'sudoku': { name: 'Sudoku', category: 'puzzle' },
-            'whack-a-mole': { name: 'Whack-a-Mole', category: 'action' }
+            'whack-a-mole': { name: 'Whack-a-Mole', category: 'action' },
+            'frogger': { name: 'Frogger', category: 'arcade' },
+            'asteroids': { name: 'Asteroids', category: 'action' }
         };
 
         // Play game function
