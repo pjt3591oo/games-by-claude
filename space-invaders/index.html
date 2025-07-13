@@ -207,7 +207,7 @@
         const invaderPadding = 10;
         let invaderDirection = 1;
         let invaderDropDistance = 40;
-        let invaderSpeed = 0.5;
+        let invaderSpeed = 0.3;
         let lastInvaderShot = 0;
 
         // Controls
@@ -234,7 +234,7 @@
                     });
                 }
             }
-            invaderSpeed = 0.5 * gameState.gameSpeed;
+            invaderSpeed = 0.3 * gameState.gameSpeed;
         }
 
         // Initialize barriers
@@ -406,7 +406,7 @@
             }
 
             // Random shooting
-            if (Date.now() - lastInvaderShot > 1000 / gameState.gameSpeed && invaders.length > 0) {
+            if (Date.now() - lastInvaderShot > 1500 / gameState.gameSpeed && invaders.length > 0) {
                 const shooter = invaders[Math.floor(Math.random() * invaders.length)];
                 invaderBullets.push({
                     x: shooter.x + shooter.width / 2,

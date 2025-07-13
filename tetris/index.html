@@ -158,7 +158,7 @@
         let gameRunning = true;
         let isPaused = false;
         let dropTime = 0;
-        let dropInterval = 1000;
+        let dropInterval = 1500;
         
         // 테트리스 블록 모양들
         const PIECES = [
@@ -227,7 +227,7 @@
             lines = 0;
             gameRunning = true;
             isPaused = false;
-            dropInterval = 1000;
+            dropInterval = 1500;
             
             nextPiece = createPiece();
             spawnPiece();
@@ -351,7 +351,7 @@
                 lines += linesCleared;
                 score += linesCleared * 100 * level;
                 level = Math.floor(lines / 10) + 1;
-                dropInterval = Math.max(50, 1000 - (level - 1) * 50);
+                dropInterval = Math.max(100, 1500 - (level - 1) * 30);
                 updateDisplay();
             }
         }

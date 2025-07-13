@@ -150,7 +150,7 @@
             gameRunning = true;
             
             if (gameLoop) clearInterval(gameLoop);
-            gameLoop = setInterval(gameStep, 150);
+            gameLoop = setInterval(gameStep, 200);
         }
 
         function pauseGame() {
@@ -158,7 +158,7 @@
                 clearInterval(gameLoop);
                 gameRunning = false;
             } else if (snake.length > 0) {
-                gameLoop = setInterval(gameStep, 150);
+                gameLoop = setInterval(gameStep, 200);
                 gameRunning = true;
             }
         }
