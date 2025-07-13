@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 도시 건설 - 교통 시스템</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #gameCanvas {
+            display: block;
+            cursor: pointer;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .top-bar {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .city-stats {
+            display: flex;
+            gap: 25px;
+            font-size: 1em;
+            font-weight: bold;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .building-panel {
+            pointer-events: auto;
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            max-width: 250px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .building-category {
+            margin-bottom: 20px;
+        }
+
+        .category-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .building-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .building-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 10px 6px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .building-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .building-btn:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .building-btn.selected {
+            background: linear-gradient(45deg, #feca57, #ff9ff3);
+            box-shadow: 0 0 15px rgba(254, 202, 87, 0.5);
+        }
+
+        .residential { background: linear-gradient(45deg, #2ecc71, #27ae60); }
+        .commercial { background: linear-gradient(45deg, #3498db, #2980b9); }
+        .industrial { background: linear-gradient(45deg, #e67e22, #d35400); }
+        .public { background: linear-gradient(45deg, #9b59b6, #8e44ad); }
+        .infrastructure { background: linear-gradient(45deg, #95a5a6, #7f8c8d); }
+        .transport { background: linear-gradient(45deg, #e74c3c, #c0392b); }
+
+        .controls {
+            pointer-events: auto;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            border: none;
+            color: white;
+            padding: 12px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            width: 150px;
+            display: block;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .demolish-mode {
+            background: linear-gradient(45deg, #e74c3c, #c0392b) !important;
+        }
+
+        .city-info {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+
+        .traffic-info {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 20px;
+            left: 250px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            min-width: 180px;
+        }
+
+        .camera-controls {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        .camera-btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            margin: 2px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+
+        .notification {
+            pointer-events: none;
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 20px;
+            border-radius: 10px;
+            max-width: 300px;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            border-left: 4px solid #2ecc71;
+        }
+
+        .notification.warning {
+            border-left: 4px solid #f39c12;
+        }
+
+        .notification.error {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .speed-controls {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            margin-left: 20px;
+        }
+
+        .speed-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .speed-btn.active {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        @media (max-width: 768px) {
+            .building-panel, .controls, .city-info, .camera-controls, .traffic-info {
+                position: relative;
+                transform: none;
+                margin: 10px;
+                max-width: none;
+            }
+
+            .building-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .city-stats {
+                gap: 15px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="ui-overlay">
+            <div class="top-bar">
+                <h1 style="margin: 0; font-size: 1.6em;">🏙️ 3D 도시 + 교통 시스템</h1>
+                <div class="city-stats">
+                    <div class="stat">💰 <span id="money">5000</span></div>
+                    <div class="stat">👥 <span id="population">0</span></div>
+                    <div class="stat">⚡ <span id="power">0</span>/<span id="powerCapacity">0</span></div>
+                    <div class="stat">💧 <span id="water">0</span>/<span id="waterCapacity">0</span></div>
+                    <div class="stat">🚗 교통: <span id="trafficLevel">0%</span></div>
+                </div>
+                
+                <div class="speed-controls">
+                    <span>속도:</span>
+                    <button class="speed-btn" onclick="setGameSpeed(0)" id="speed0">⏸️</button>
+                    <button class="speed-btn active" onclick="setGameSpeed(1)" id="speed1">▶️</button>
+                    <button class="speed-btn" onclick="setGameSpeed(2)" id="speed2">⏩</button>
+                    <button class="speed-btn" onclick="setGameSpeed(3)" id="speed3">⏭️</button>
+                </div>
+            </div>
+
+            <div class="building-panel">
+                <div class="building-category">
+                    <div class="category-title">🏠 주거</div>
+                    <div class="building-grid">
+                        <button class="building-btn residential" onclick="selectBuilding('house')" id="houseBtn">
+                            🏠 주택<br>💰50
+                        </button>
+                        <button class="building-btn residential" onclick="selectBuilding('apartment')" id="apartmentBtn">
+                            🏢 아파트<br>💰150
+                        </button>
+                    </div>
+                </div>
+
+                <div class="building-category">
+                    <div class="category-title">🏪 상업</div>
+                    <div class="building-grid">
+                        <button class="building-btn commercial" onclick="selectBuilding('shop')" id="shopBtn">
+                            🏪 상점<br>💰80
+                        </button>
+                        <button class="building-btn commercial" onclick="selectBuilding('mall')" id="mallBtn">
+                            🛒 몰<br>💰200
+                        </button>
+                    </div>
+                </div>
+
+                <div class="building-category">
+                    <div class="category-title">🏭 공업</div>
+                    <div class="building-grid">
+                        <button class="building-btn industrial" onclick="selectBuilding('factory')" id="factoryBtn">
+                            🏭 공장<br>💰120
+                        </button>
+                        <button class="building-btn industrial" onclick="selectBuilding('powerPlant')" id="powerPlantBtn">
+                            ⚡ 발전소<br>💰300
+                        </button>
+                    </div>
+                </div>
+
+                <div class="building-category">
+                    <div class="category-title">🚌 교통</div>
+                    <div class="building-grid">
+                        <button class="building-btn transport" onclick="selectBuilding('road')" id="roadBtn">
+                            🛣️ 도로<br>💰10
+                        </button>
+                        <button class="building-btn transport" onclick="selectBuilding('busStop')" id="busStopBtn">
+                            🚌 버스정류장<br>💰40
+                        </button>
+                        <button class="building-btn transport" onclick="selectBuilding('subway')" id="subwayBtn">
+                            🚇 지하철역<br>💰200
+                        </button>
+                        <button class="building-btn transport" onclick="selectBuilding('intersection')" id="intersectionBtn">
+                            🚦 교차로<br>💰30
+                        </button>
+                    </div>
+                </div>
+
+                <div class="building-category">
+                    <div class="category-title">🏛️ 공공</div>
+                    <div class="building-grid">
+                        <button class="building-btn public" onclick="selectBuilding('school')" id="schoolBtn">
+                            🏫 학교<br>💰180
+                        </button>
+                        <button class="building-btn public" onclick="selectBuilding('park')" id="parkBtn">
+                            🌳 공원<br>💰60
+                        </button>
+                        <button class="building-btn infrastructure" onclick="selectBuilding('water')" id="waterBtn">
+                            💧 급수탑<br>💰100
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <h3 style="margin: 0 0 15px 0; text-align: center;">제어</h3>
+                <button class="control-btn" onclick="toggleDemolish()" id="demolishBtn">
+                    🧨 철거 모드
+                </button>
+                <button class="control-btn" onclick="toggleTraffic()" id="trafficBtn">
+                    🚗 교통 토글
+                </button>
+                <button class="control-btn" onclick="resetCamera()">
+                    📷 카메라 리셋
+                </button>
+                <button class="control-btn" onclick="saveCity()">
+                    💾 도시 저장
+                </button>
+                <button class="control-btn" onclick="togglePause()" id="pauseBtn">
+                    ⏸️ 일시정지
+                </button>
+            </div>
+
+            <div class="city-info">
+                <h3 style="margin: 0 0 10px 0;">도시 정보</h3>
+                <div class="info-item">
+                    <span>🏠 건물 수:</span>
+                    <span id="totalBuildings">0</span>
+                </div>
+                <div class="info-item">
+                    <span>😊 만족도:</span>
+                    <span id="happiness">50%</span>
+                </div>
+                <div class="info-item">
+                    <span>🌱 환경:</span>
+                    <span id="environment">70%</span>
+                </div>
+                <div class="info-item">
+                    <span>🚔 치안:</span>
+                    <span id="safety">60%</span>
+                </div>
+            </div>
+
+            <div class="traffic-info">
+                <h3 style="margin: 0 0 10px 0;">교통 정보</h3>
+                <div class="info-item">
+                    <span>🛣️ 도로:</span>
+                    <span id="roadCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>🚗 차량:</span>
+                    <span id="vehicleCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>🚌 버스:</span>
+                    <span id="busCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>🚇 지하철:</span>
+                    <span id="subwayCount">0</span>
+                </div>
+                <div class="info-item">
+                    <span>📊 교통흐름:</span>
+                    <span id="trafficFlow">원활</span>
+                </div>
+            </div>
+
+            <div class="camera-controls">
+                <div style="margin-bottom: 10px; font-size: 0.9em;">카메라 조작</div>
+                <div style="font-size: 0.8em; opacity: 0.8;">
+                    🖱️ 드래그: 회전<br>
+                    🔄 휠: 줌<br>
+                    우클릭: 팬
+                </div>
+                <button class="camera-btn" onclick="viewFromTop()">🔝 탑뷰</button>
+                <button class="camera-btn" onclick="viewFromSide()">📐 사이드뷰</button>
+            </div>
+        </div>
+
+        <div class="notification" id="notification">
+            <div id="notificationText"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Three.js 설정
+        let scene, camera, renderer, raycaster, mouse;
+        let cityGrid = {};
+        let vehicles = [];
+        let roadNetwork = new Map();
+        let gameState = {
+            money: 5000,
+            population: 0,
+            power: 0,
+            powerCapacity: 0,
+            water: 0,
+            waterCapacity: 0,
+            happiness: 50,
+            environment: 70,
+            safety: 60,
+            selectedBuilding: null,
+            demolishMode: false,
+            paused: false,
+            gameSpeed: 1,
+            lastUpdate: Date.now(),
+            trafficEnabled: true,
+            trafficLevel: 0
+        };
+
+        // 카메라 컨트롤 변수
+        let isMouseDown = false;
+        let isRightMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let cameraAngleX = -Math.PI / 4;
+        let cameraAngleY = Math.PI / 4;
+        let cameraDistance = 30;
+        let cameraTarget = new THREE.Vector3(0, 0, 0);
+
+        // 건물 타입 정의
+        const buildingTypes = {
+            house: { 
+                cost: 50, population: 4, power: -2, water: -1, 
+                happiness: 2, income: 20, environment: -1,
+                color: 0x27ae60, height: 2, traffic: 2
+            },
+            apartment: { 
+                cost: 150, population: 12, power: -5, water: -3, 
+                happiness: 1, income: 60, environment: -2,
+                color: 0x2ecc71, height: 6, traffic: 5
+            },
+            shop: { 
+                cost: 80, population: -2, power: -3, water: -1, 
+                happiness: 3, income: 40, jobs: 3,
+                color: 0x3498db, height: 3, traffic: 3
+            },
+            mall: { 
+                cost: 200, population: -5, power: -8, water: -3, 
+                happiness: 5, income: 100, jobs: 8,
+                color: 0x2980b9, height: 4, traffic: 8
+            },
+            factory: { 
+                cost: 120, population: -3, power: -10, water: -5, 
+                happiness: -3, income: 80, environment: -5, jobs: 6,
+                color: 0xe67e22, height: 4, traffic: 6
+            },
+            powerPlant: { 
+                cost: 300, population: -2, powerCapacity: 100, 
+                happiness: -2, environment: -8, income: -30,
+                color: 0xf39c12, height: 5, traffic: 2
+            },
+            school: { 
+                cost: 180, population: -1, power: -4, water: -2, 
+                happiness: 8, income: -40, environment: 1,
+                color: 0x9b59b6, height: 3, traffic: 4
+            },
+            park: { 
+                cost: 60, happiness: 6, environment: 10, income: -10,
+                color: 0x27ae60, height: 0.5, traffic: 1
+            },
+            road: { 
+                cost: 10, happiness: 1, income: -2,
+                color: 0x34495e, height: 0.1, isRoad: true
+            },
+            intersection: {
+                cost: 30, happiness: 2, income: -5,
+                color: 0x2c3e50, height: 0.1, isRoad: true, isIntersection: true
+            },
+            busStop: {
+                cost: 40, happiness: 5, income: -10, power: -2,
+                color: 0xe74c3c, height: 1, traffic: -5, publicTransport: true
+            },
+            subway: {
+                cost: 200, happiness: 15, income: -50, power: -10,
+                color: 0x8e44ad, height: 0.5, traffic: -15, publicTransport: true
+            },
+            water: { 
+                cost: 100, waterCapacity: 50, power: -5, income: -20,
+                color: 0x3498db, height: 4
+            }
+        };
+
+        // 차량 클래스
+        class Vehicle {
+            constructor(start, end, type = 'car') {
+                this.start = start;
+                this.end = end;
+                this.currentPos = { ...start };
+                this.targetPos = { ...end };
+                this.type = type;
+                this.speed = type === 'bus' ? 0.03 : 0.05;
+                this.progress = 0;
+                this.path = this.findPath(start, end);
+                this.pathIndex = 0;
+                
+                // 3D 메시 생성
+                this.createMesh();
+            }
+
+            createMesh() {
+                let geometry, material;
+                
+                if (this.type === 'bus') {
+                    geometry = new THREE.BoxGeometry(0.4, 0.3, 0.8);
+                    material = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
+                } else {
+                    geometry = new THREE.BoxGeometry(0.3, 0.2, 0.6);
+                    material = new THREE.MeshLambertMaterial({ 
+                        color: Math.random() * 0xffffff 
+                    });
+                }
+                
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.set(this.currentPos.x, 0.3, this.currentPos.z);
+                this.mesh.castShadow = true;
+                scene.add(this.mesh);
+            }
+
+            findPath(start, end) {
+                // 간단한 A* 경로 찾기 (여기서는 단순화)
+                const path = [];
+                const current = { ...start };
+                
+                while (current.x !== end.x || current.z !== end.z) {
+                    path.push({ ...current });
+                    
+                    if (current.x < end.x) current.x++;
+                    else if (current.x > end.x) current.x--;
+                    else if (current.z < end.z) current.z++;
+                    else if (current.z > end.z) current.z--;
+                }
+                
+                path.push({ ...end });
+                return path;
+            }
+
+            update() {
+                if (this.pathIndex >= this.path.length - 1) {
+                    return false; // 목적지 도착
+                }
+
+                const current = this.path[this.pathIndex];
+                const next = this.path[this.pathIndex + 1];
+                
+                this.progress += this.speed;
+                
+                if (this.progress >= 1) {
+                    this.progress = 0;
+                    this.pathIndex++;
+                    
+                    if (this.pathIndex >= this.path.length - 1) {
+                        return false;
+                    }
+                }
+                
+                // 현재 위치와 다음 위치 사이 보간
+                const currentTarget = this.path[this.pathIndex];
+                const nextTarget = this.path[this.pathIndex + 1];
+                
+                if (nextTarget) {
+                    this.currentPos.x = currentTarget.x + (nextTarget.x - currentTarget.x) * this.progress;
+                    this.currentPos.z = currentTarget.z + (nextTarget.z - currentTarget.z) * this.progress;
+                    
+                    // 메시 위치 업데이트
+                    this.mesh.position.set(this.currentPos.x, 0.3, this.currentPos.z);
+                    
+                    // 차량이 향하는 방향으로 회전
+                    const direction = Math.atan2(nextTarget.z - currentTarget.z, nextTarget.x - currentTarget.x);
+                    this.mesh.rotation.y = direction - Math.PI / 2;
+                }
+                
+                return true;
+            }
+
+            destroy() {
+                scene.remove(this.mesh);
+            }
+        }
+
+        function initGame() {
+            initThree();
+            createGrid();
+            updateUI();
+            gameLoop();
+            showNotification('3D 도시 + 교통 시스템에 오신 것을 환영합니다!', 'success');
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            updateCameraPosition();
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 50, 50);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 500;
+            directionalLight.shadow.camera.left = -50;
+            directionalLight.shadow.camera.right = 50;
+            directionalLight.shadow.camera.top = 50;
+            directionalLight.shadow.camera.bottom = -50;
+            scene.add(directionalLight);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            setupEventListeners();
+        }
+
+        function createGrid() {
+            const gridSize = 20;
+            const gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x444444, 0x444444);
+            gridHelper.position.y = 0;
+            scene.add(gridHelper);
+
+            const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
+            const planeMaterial = new THREE.MeshLambertMaterial({ color: 0x90EE90, transparent: true, opacity: 0.8 });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.y = -0.01;
+            plane.receiveShadow = true;
+            scene.add(plane);
+        }
+
+        function setupEventListeners() {
+            const canvas = renderer.domElement;
+
+            canvas.addEventListener('mousedown', onMouseDown, false);
+            canvas.addEventListener('mousemove', onMouseMove, false);
+            canvas.addEventListener('mouseup', onMouseUp, false);
+            canvas.addEventListener('wheel', onMouseWheel, false);
+            canvas.addEventListener('click', onMouseClick, false);
+            canvas.addEventListener('contextmenu', (e) => e.preventDefault(), false);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onMouseDown(event) {
+            if (event.button === 0) {
+                isMouseDown = true;
+            } else if (event.button === 2) {
+                isRightMouseDown = true;
+            }
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseMove(event) {
+            if (isMouseDown) {
+                const deltaX = event.clientX - mouseX;
+                const deltaY = event.clientY - mouseY;
+                
+                cameraAngleY -= deltaX * 0.01;
+                cameraAngleX -= deltaY * 0.01;
+                cameraAngleX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraAngleX));
+                
+                updateCameraPosition();
+            } else if (isRightMouseDown) {
+                const deltaX = event.clientX - mouseX;
+                const deltaY = event.clientY - mouseY;
+                
+                const moveSpeed = 0.02;
+                cameraTarget.x -= deltaX * moveSpeed;
+                cameraTarget.z += deltaY * moveSpeed;
+                
+                updateCameraPosition();
+            }
+            
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseUp(event) {
+            isMouseDown = false;
+            isRightMouseDown = false;
+        }
+
+        function onMouseWheel(event) {
+            cameraDistance += event.deltaY * 0.01;
+            cameraDistance = Math.max(5, Math.min(50, cameraDistance));
+            updateCameraPosition();
+        }
+
+        function onMouseClick(event) {
+            if (isMouseDown || isRightMouseDown) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const intersectPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(plane, intersectPoint);
+            
+            if (intersectPoint) {
+                const gridX = Math.round(intersectPoint.x);
+                const gridZ = Math.round(intersectPoint.z);
+                
+                if (Math.abs(gridX) <= 10 && Math.abs(gridZ) <= 10) {
+                    placeBuilding(gridX, gridZ);
+                }
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateCameraPosition() {
+            const x = cameraTarget.x + cameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+            const y = cameraTarget.y + cameraDistance * Math.sin(cameraAngleX);
+            const z = cameraTarget.z + cameraDistance * Math.cos(cameraAngleX) * Math.sin(cameraAngleY);
+            
+            camera.position.set(x, y, z);
+            camera.lookAt(cameraTarget);
+        }
+
+        function selectBuilding(type) {
+            gameState.selectedBuilding = type;
+            gameState.demolishMode = false;
+            
+            document.querySelectorAll('.building-btn').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById(type + 'Btn').classList.add('selected');
+            document.getElementById('demolishBtn').classList.remove('demolish-mode');
+            
+            updateBuildingButtons();
+        }
+
+        function toggleDemolish() {
+            gameState.demolishMode = !gameState.demolishMode;
+            gameState.selectedBuilding = null;
+            
+            document.querySelectorAll('.building-btn').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById('demolishBtn').classList.toggle('demolish-mode', gameState.demolishMode);
+        }
+
+        function toggleTraffic() {
+            gameState.trafficEnabled = !gameState.trafficEnabled;
+            document.getElementById('trafficBtn').textContent = gameState.trafficEnabled ? 
+                '🚗 교통 끄기' : '🚗 교통 켜기';
+                
+            if (!gameState.trafficEnabled) {
+                // 모든 차량 제거
+                vehicles.forEach(vehicle => vehicle.destroy());
+                vehicles = [];
+            }
+        }
+
+        function placeBuilding(gridX, gridZ) {
+            const key = `${gridX},${gridZ}`;
+            
+            if (gameState.demolishMode) {
+                const building = cityGrid[key];
+                if (building) {
+                    const refund = Math.floor(buildingTypes[building.type].cost * 0.5);
+                    gameState.money += refund;
+                    scene.remove(building.mesh);
+                    delete cityGrid[key];
+                    
+                    // 도로 네트워크에서 제거
+                    if (buildingTypes[building.type].isRoad) {
+                        roadNetwork.delete(key);
+                        updateRoadNetwork();
+                    }
+                    
+                    showNotification(`건물을 철거했습니다. ${refund}원을 환불받았습니다.`, 'success');
+                    updateUI();
+                }
+                return;
+            }
+
+            if (!gameState.selectedBuilding) return;
+
+            if (cityGrid[key]) {
+                showNotification('이미 건물이 있습니다!', 'error');
+                return;
+            }
+
+            const buildingType = buildingTypes[gameState.selectedBuilding];
+            
+            if (gameState.money < buildingType.cost) {
+                showNotification('돈이 부족합니다!', 'error');
+                return;
+            }
+
+            const building = create3DBuilding(gameState.selectedBuilding, gridX, gridZ);
+            scene.add(building.mesh);
+            
+            cityGrid[key] = building;
+            gameState.money -= buildingType.cost;
+            
+            // 도로 네트워크 업데이트
+            if (buildingType.isRoad) {
+                roadNetwork.set(key, { x: gridX, z: gridZ, type: gameState.selectedBuilding });
+                updateRoadNetwork();
+            }
+            
+            showNotification(`${gameState.selectedBuilding} 건물을 건설했습니다!`, 'success');
+            updateUI();
+        }
+
+        function create3DBuilding(type, x, z) {
+            const buildingData = buildingTypes[type];
+            
+            let geometry;
+            if (type === 'park') {
+                geometry = new THREE.SphereGeometry(0.3, 8, 6);
+            } else if (type === 'road') {
+                geometry = new THREE.BoxGeometry(0.8, buildingData.height, 0.8);
+            } else if (type === 'intersection') {
+                geometry = new THREE.BoxGeometry(0.9, buildingData.height, 0.9);
+            } else if (type === 'busStop') {
+                geometry = new THREE.BoxGeometry(0.3, buildingData.height, 0.6);
+            } else if (type === 'subway') {
+                geometry = new THREE.CylinderGeometry(0.4, 0.4, buildingData.height, 8);
+            } else if (type === 'powerPlant') {
+                geometry = new THREE.CylinderGeometry(0.3, 0.4, buildingData.height, 8);
+            } else if (type === 'water') {
+                geometry = new THREE.CylinderGeometry(0.2, 0.3, buildingData.height, 6);
+            } else {
+                const width = type === 'apartment' ? 0.8 : 0.6;
+                const depth = type === 'mall' ? 0.8 : 0.6;
+                geometry = new THREE.BoxGeometry(width, buildingData.height, depth);
+            }
+
+            const material = new THREE.MeshLambertMaterial({ color: buildingData.color });
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            mesh.position.set(x, buildingData.height / 2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            return {
+                mesh: mesh,
+                type: type,
+                x: x,
+                z: z
+            };
+        }
+
+        function updateRoadNetwork() {
+            // 도로 네트워크가 업데이트될 때마다 새로운 차량 생성 경로 계산
+        }
+
+        function spawnVehicle() {
+            if (!gameState.trafficEnabled || vehicles.length > 50) return;
+
+            const roads = Array.from(roadNetwork.values());
+            if (roads.length < 2) return;
+
+            const startRoad = roads[Math.floor(Math.random() * roads.length)];
+            const endRoad = roads[Math.floor(Math.random() * roads.length)];
+            
+            if (startRoad !== endRoad) {
+                const vehicleType = Math.random() < 0.1 ? 'bus' : 'car';
+                const vehicle = new Vehicle(startRoad, endRoad, vehicleType);
+                vehicles.push(vehicle);
+            }
+        }
+
+        function updateVehicles() {
+            for (let i = vehicles.length - 1; i >= 0; i--) {
+                if (!vehicles[i].update()) {
+                    vehicles[i].destroy();
+                    vehicles.splice(i, 1);
+                }
+            }
+        }
+
+        function calculateTrafficLevel() {
+            const roadCount = roadNetwork.size;
+            const vehicleCount = vehicles.length;
+            const buildings = Object.values(cityGrid);
+            
+            let totalTrafficDemand = 0;
+            buildings.forEach(building => {
+                const type = buildingTypes[building.type];
+                totalTrafficDemand += type.traffic || 0;
+            });
+
+            const trafficCapacity = roadCount * 5; // 도로당 5대 용량
+            const trafficLevel = trafficCapacity > 0 ? 
+                Math.min(100, (totalTrafficDemand / trafficCapacity) * 100) : 0;
+            
+            return Math.round(trafficLevel);
+        }
+
+        function gameLoop() {
+            const now = Date.now();
+            const deltaTime = now - gameState.lastUpdate;
+            
+            if (!gameState.paused && gameState.gameSpeed > 0) {
+                if (deltaTime > (2000 / gameState.gameSpeed)) {
+                    updateCity();
+                    gameState.lastUpdate = now;
+                }
+                
+                // 차량 업데이트 (더 자주)
+                if (deltaTime > (100 / gameState.gameSpeed)) {
+                    updateVehicles();
+                    
+                    // 새 차량 생성 (확률적)
+                    if (Math.random() < 0.02 * gameState.gameSpeed) {
+                        spawnVehicle();
+                    }
+                }
+            }
+            
+            renderer.render(scene, camera);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateCity() {
+            let totalIncome = 0;
+            let totalPopulation = 0;
+            let totalPower = 0;
+            let totalPowerCapacity = 0;
+            let totalWater = 0;
+            let totalWaterCapacity = 0;
+            let totalHappiness = 50;
+            let totalEnvironment = 70;
+            let totalSafety = 60;
+
+            Object.values(cityGrid).forEach(building => {
+                const type = buildingTypes[building.type];
+                totalIncome += type.income || 0;
+                totalPopulation += type.population || 0;
+                totalPower += type.power || 0;
+                totalPowerCapacity += type.powerCapacity || 0;
+                totalWater += type.water || 0;
+                totalWaterCapacity += type.waterCapacity || 0;
+                totalHappiness += type.happiness || 0;
+                totalEnvironment += type.environment || 0;
+                totalSafety += type.safety || 0;
+            });
+
+            totalIncome += Math.max(0, totalPopulation) * 5;
+
+            gameState.money += totalIncome;
+            gameState.population = Math.max(0, totalPopulation);
+            gameState.power = Math.abs(totalPower);
+            gameState.powerCapacity = totalPowerCapacity;
+            gameState.water = Math.abs(totalWater);
+            gameState.waterCapacity = totalWaterCapacity;
+            
+            gameState.happiness = Math.max(0, Math.min(100, totalHappiness));
+            gameState.environment = Math.max(0, Math.min(100, totalEnvironment));
+            gameState.safety = Math.max(0, Math.min(100, totalSafety));
+            gameState.trafficLevel = calculateTrafficLevel();
+
+            // 교통 체증이 심하면 만족도 하락
+            if (gameState.trafficLevel > 80) {
+                gameState.happiness -= 5;
+                showNotification('교통 체증이 심합니다! 도로나 대중교통을 확충하세요.', 'warning');
+            }
+
+            if (gameState.power > gameState.powerCapacity) {
+                gameState.happiness -= 10;
+                showNotification('전력이 부족합니다!', 'warning');
+            }
+            if (gameState.water > gameState.waterCapacity) {
+                gameState.happiness -= 10;
+                showNotification('물이 부족합니다!', 'warning');
+            }
+
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('money').textContent = gameState.money.toLocaleString();
+            document.getElementById('population').textContent = gameState.population.toLocaleString();
+            document.getElementById('power').textContent = gameState.power;
+            document.getElementById('powerCapacity').textContent = gameState.powerCapacity;
+            document.getElementById('water').textContent = gameState.water;
+            document.getElementById('waterCapacity').textContent = gameState.waterCapacity;
+            document.getElementById('trafficLevel').textContent = gameState.trafficLevel + '%';
+            
+            document.getElementById('happiness').textContent = Math.round(gameState.happiness) + '%';
+            document.getElementById('environment').textContent = Math.round(gameState.environment) + '%';
+            document.getElementById('safety').textContent = Math.round(gameState.safety) + '%';
+            
+            document.getElementById('totalBuildings').textContent = Object.keys(cityGrid).length;
+            
+            // 교통 정보 업데이트
+            const roadCount = Array.from(roadNetwork.values()).length;
+            const busStops = Object.values(cityGrid).filter(b => b.type === 'busStop').length;
+            const subways = Object.values(cityGrid).filter(b => b.type === 'subway').length;
+            const buses = vehicles.filter(v => v.type === 'bus').length;
+            
+            document.getElementById('roadCount').textContent = roadCount;
+            document.getElementById('vehicleCount').textContent = vehicles.length;
+            document.getElementById('busCount').textContent = buses;
+            document.getElementById('subwayCount').textContent = subways;
+            
+            const trafficFlow = gameState.trafficLevel < 30 ? '원활' : 
+                                gameState.trafficLevel < 70 ? '보통' : '혼잡';
+            document.getElementById('trafficFlow').textContent = trafficFlow;
+            
+            updateBuildingButtons();
+        }
+
+        function updateBuildingButtons() {
+            Object.keys(buildingTypes).forEach(type => {
+                const btn = document.getElementById(type + 'Btn');
+                if (btn) {
+                    const cost = buildingTypes[type].cost;
+                    btn.disabled = gameState.money < cost;
+                }
+            });
+        }
+
+        function setGameSpeed(speed) {
+            gameState.gameSpeed = speed;
+            gameState.paused = speed === 0;
+            
+            document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('speed' + speed).classList.add('active');
+            
+            document.getElementById('pauseBtn').textContent = speed === 0 ? '▶️ 재생' : '⏸️ 일시정지';
+        }
+
+        function resetCamera() {
+            cameraAngleX = -Math.PI / 4;
+            cameraAngleY = Math.PI / 4;
+            cameraDistance = 30;
+            cameraTarget.set(0, 0, 0);
+            updateCameraPosition();
+        }
+
+        function viewFromTop() {
+            cameraAngleX = -Math.PI / 2 + 0.1;
+            cameraAngleY = 0;
+            cameraDistance = 25;
+            updateCameraPosition();
+        }
+
+        function viewFromSide() {
+            cameraAngleX = 0;
+            cameraAngleY = Math.PI / 2;
+            cameraDistance = 25;
+            updateCameraPosition();
+        }
+
+        function togglePause() {
+            gameState.paused = !gameState.paused;
+            document.getElementById('pauseBtn').textContent = gameState.paused ? '▶️ 재생' : '⏸️ 일시정지';
+        }
+
+        function saveCity() {
+            const saveData = {
+                gameState: gameState,
+                buildings: Object.keys(cityGrid).map(key => ({
+                    key: key,
+                    type: cityGrid[key].type,
+                    x: cityGrid[key].x,
+                    z: cityGrid[key].z
+                })),
+                roadNetwork: Array.from(roadNetwork.entries())
+            };
+            
+            localStorage.setItem('cityBuilder3DSave', JSON.stringify(saveData));
+            showNotification('3D 도시가 저장되었습니다!', 'success');
+        }
+
+        function loadCity() {
+            const saveData = localStorage.getItem('cityBuilder3DSave');
+            if (saveData) {
+                const data = JSON.parse(saveData);
+                gameState = data.gameState;
+                
+                Object.values(cityGrid).forEach(building => {
+                    scene.remove(building.mesh);
+                });
+                cityGrid = {};
+                roadNetwork.clear();
+                
+                data.buildings.forEach(buildingData => {
+                    const building = create3DBuilding(buildingData.type, buildingData.x, buildingData.z);
+                    scene.add(building.mesh);
+                    cityGrid[buildingData.key] = building;
+                    
+                    if (buildingTypes[buildingData.type].isRoad) {
+                        roadNetwork.set(buildingData.key, { x: buildingData.x, z: buildingData.z, type: buildingData.type });
+                    }
+                });
+                
+                if (data.roadNetwork) {
+                    data.roadNetwork.forEach(([key, value]) => {
+                        roadNetwork.set(key, value);
+                    });
+                }
+                
+                updateUI();
+                showNotification('3D 도시를 불러왔습니다!', 'success');
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const text = document.getElementById('notificationText');
+            
+            text.textContent = message;
+            notification.className = `notification ${type} show`;
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // 게임 시작
+        initGame();
+        
+        if (localStorage.getItem('cityBuilder3DSave')) {
+            setTimeout(() => {
+                loadCity();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
