@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agar.io Clone</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #111;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            text-align: center;
+        }
+
+        #gameCanvas {
+            border: 2px solid #333;
+            background: #0a0a0a;
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+        }
+
+        #scoreBoard {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 150px;
+        }
+
+        #score {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        #leaderboard {
+            font-size: 14px;
+            text-align: left;
+        }
+
+        #leaderboard h3 {
+            margin: 10px 0 5px 0;
+            font-size: 16px;
+        }
+
+        #minimap {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            border: 2px solid #333;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+        }
+
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        #gameOver h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        #startMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        #playerName {
+            padding: 10px;
+            font-size: 18px;
+            border: 2px solid #333;
+            background: #222;
+            color: white;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            width: 200px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            font-size: 20px;
+            background: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #27ae60;
+        }
+
+        .controls {
+            margin-top: 20px;
+            color: #999;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="scoreBoard">
+            <div id="score">Mass: 10</div>
+            <div id="leaderboard">
+                <h3>Leaderboard</h3>
+                <ol id="leaders"></ol>
+            </div>
+        </div>
+        
+        <canvas id="minimap" width="150" height="150"></canvas>
+        
+        <div id="startMenu">
+            <h1>Agar.io Clone</h1>
+            <input type="text" id="playerName" placeholder="Enter your name" maxlength="12">
+            <br>
+            <button class="btn" onclick="startGame()">Play</button>
+            <div class="controls">
+                <p>Move mouse to control</p>
+                <p>Press SPACE to split</p>
+                <p>Press W to eject mass</p>
+            </div>
+        </div>
+        
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p>Final Mass: <span id="finalScore">0</span></p>
+            <button class="btn" onclick="respawn()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        
+        const WORLD_WIDTH = 3000;
+        const WORLD_HEIGHT = 3000;
+        const FOOD_COUNT = 500;
+        const BOT_COUNT = 10;
+        
+        let gameRunning = false;
+        let camera = { x: 0, y: 0, scale: 1 };
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        let playerName = 'Player';
+        
+        // Game entities
+        let player = null;
+        let foods = [];
+        let bots = [];
+        let viruses = [];
+        let ejectedMass = [];
+        
+        // Cell class
+        class Cell {
+            constructor(x, y, mass, color, name = '') {
+                this.x = x;
+                this.y = y;
+                this.mass = mass;
+                this.color = color;
+                this.name = name;
+                this.targetX = x;
+                this.targetY = y;
+                this.velocity = { x: 0, y: 0 };
+            }
+            
+            get radius() {
+                return Math.sqrt(this.mass) * 2;
+            }
+            
+            update() {
+                // Move towards target
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    const speed = Math.max(3, 10 - this.mass * 0.001);
+                    this.velocity.x = (dx / distance) * speed;
+                    this.velocity.y = (dy / distance) * speed;
+                    
+                    this.x += this.velocity.x;
+                    this.y += this.velocity.y;
+                }
+                
+                // Keep in bounds
+                this.x = Math.max(this.radius, Math.min(WORLD_WIDTH - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(WORLD_HEIGHT - this.radius, this.y));
+                
+                // Mass decay
+                if (this.mass > 100) {
+                    this.mass *= 0.998;
+                }
+            }
+            
+            draw(ctx, offsetX, offsetY, scale) {
+                const screenX = (this.x - offsetX) * scale + canvas.width / 2;
+                const screenY = (this.y - offsetY) * scale + canvas.height / 2;
+                const screenRadius = this.radius * scale;
+                
+                // Draw cell
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw border
+                ctx.strokeStyle = this.color.replace('0.8', '1');
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Draw name
+                if (this.name && screenRadius > 20) {
+                    ctx.fillStyle = 'white';
+                    ctx.font = `${Math.max(12, screenRadius / 3)}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.name, screenX, screenY);
+                }
+            }
+            
+            canEat(other) {
+                const dx = this.x - other.x;
+                const dy = this.y - other.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < this.radius - other.radius / 2 && this.mass > other.mass * 1.25;
+            }
+            
+            eat(other) {
+                this.mass += other.mass * 0.9;
+            }
+            
+            split() {
+                if (this.mass > 50) {
+                    const newMass = this.mass / 2;
+                    this.mass = newMass;
+                    
+                    const angle = Math.atan2(this.velocity.y, this.velocity.x);
+                    const distance = this.radius + 10;
+                    
+                    return new Cell(
+                        this.x + Math.cos(angle) * distance,
+                        this.y + Math.sin(angle) * distance,
+                        newMass,
+                        this.color,
+                        this.name
+                    );
+                }
+                return null;
+            }
+            
+            ejectMass() {
+                if (this.mass > 50) {
+                    this.mass -= 20;
+                    
+                    const angle = Math.atan2(this.velocity.y, this.velocity.x);
+                    const distance = this.radius + 20;
+                    
+                    return {
+                        x: this.x + Math.cos(angle) * distance,
+                        y: this.y + Math.sin(angle) * distance,
+                        mass: 15,
+                        velocity: {
+                            x: Math.cos(angle) * 15,
+                            y: Math.sin(angle) * 15
+                        }
+                    };
+                }
+                return null;
+            }
+        }
+        
+        // Initialize food
+        function initFood() {
+            foods = [];
+            for (let i = 0; i < FOOD_COUNT; i++) {
+                foods.push({
+                    x: Math.random() * WORLD_WIDTH,
+                    y: Math.random() * WORLD_HEIGHT,
+                    mass: 1,
+                    color: `hsl(${Math.random() * 360}, 70%, 50%)`
+                });
+            }
+        }
+        
+        // Initialize viruses
+        function initViruses() {
+            viruses = [];
+            for (let i = 0; i < 10; i++) {
+                viruses.push({
+                    x: Math.random() * WORLD_WIDTH,
+                    y: Math.random() * WORLD_HEIGHT,
+                    mass: 100,
+                    spikes: 8
+                });
+            }
+        }
+        
+        // Initialize bots
+        function initBots() {
+            bots = [];
+            const botNames = ['Bot', 'AI', 'Computer', 'NPC', 'Enemy', 'Rival', 'Foe', 'Opponent'];
+            
+            for (let i = 0; i < BOT_COUNT; i++) {
+                const color = `hsla(${Math.random() * 360}, 70%, 50%, 0.8)`;
+                const name = botNames[Math.floor(Math.random() * botNames.length)] + (i + 1);
+                bots.push(new Cell(
+                    Math.random() * WORLD_WIDTH,
+                    Math.random() * WORLD_HEIGHT,
+                    Math.random() * 50 + 20,
+                    color,
+                    name
+                ));
+            }
+        }
+        
+        // Update bots AI
+        function updateBots() {
+            bots.forEach(bot => {
+                // Simple AI: move towards nearest food or smaller cell
+                let nearestTarget = null;
+                let nearestDistance = Infinity;
+                
+                // Check foods
+                foods.forEach(food => {
+                    const dx = food.x - bot.x;
+                    const dy = food.y - bot.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < nearestDistance && distance < 200) {
+                        nearestDistance = distance;
+                        nearestTarget = food;
+                    }
+                });
+                
+                // Check other cells
+                [...bots, player].forEach(other => {
+                    if (other && other !== bot && bot.canEat(other)) {
+                        const dx = other.x - bot.x;
+                        const dy = other.y - bot.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestTarget = other;
+                        }
+                    }
+                });
+                
+                // Avoid larger cells
+                [...bots, player].forEach(other => {
+                    if (other && other !== bot && other.mass > bot.mass * 1.25) {
+                        const dx = other.x - bot.x;
+                        const dy = other.y - bot.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 150) {
+                            bot.targetX = bot.x - dx;
+                            bot.targetY = bot.y - dy;
+                            return;
+                        }
+                    }
+                });
+                
+                // Move towards target
+                if (nearestTarget) {
+                    bot.targetX = nearestTarget.x;
+                    bot.targetY = nearestTarget.y;
+                } else {
+                    // Random movement
+                    if (Math.random() < 0.02) {
+                        bot.targetX = Math.random() * WORLD_WIDTH;
+                        bot.targetY = Math.random() * WORLD_HEIGHT;
+                    }
+                }
+                
+                bot.update();
+            });
+        }
+        
+        // Handle collisions
+        function handleCollisions() {
+            // Player eating
+            if (player) {
+                // Eat food
+                foods = foods.filter(food => {
+                    if (player.canEat(food)) {
+                        player.eat(food);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Eat ejected mass
+                ejectedMass = ejectedMass.filter(mass => {
+                    const dx = player.x - mass.x;
+                    const dy = player.y - mass.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < player.radius) {
+                        player.mass += mass.mass;
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Eat bots
+                bots = bots.filter(bot => {
+                    if (player.canEat(bot)) {
+                        player.eat(bot);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Check if eaten by bot
+                bots.forEach(bot => {
+                    if (bot.canEat(player)) {
+                        gameOver();
+                    }
+                });
+            }
+            
+            // Bots eating
+            bots.forEach(bot => {
+                // Eat food
+                foods = foods.filter(food => {
+                    if (bot.canEat(food)) {
+                        bot.eat(food);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Eat other bots
+                bots = bots.filter(other => {
+                    if (bot !== other && bot.canEat(other)) {
+                        bot.eat(other);
+                        return false;
+                    }
+                    return true;
+                });
+            });
+            
+            // Respawn food
+            while (foods.length < FOOD_COUNT) {
+                foods.push({
+                    x: Math.random() * WORLD_WIDTH,
+                    y: Math.random() * WORLD_HEIGHT,
+                    mass: 1,
+                    color: `hsl(${Math.random() * 360}, 70%, 50%)`
+                });
+            }
+            
+            // Respawn bots
+            while (bots.length < BOT_COUNT) {
+                const color = `hsla(${Math.random() * 360}, 70%, 50%, 0.8)`;
+                const name = 'Bot' + (bots.length + 1);
+                bots.push(new Cell(
+                    Math.random() * WORLD_WIDTH,
+                    Math.random() * WORLD_HEIGHT,
+                    Math.random() * 50 + 20,
+                    color,
+                    name
+                ));
+            }
+        }
+        
+        // Update camera
+        function updateCamera() {
+            if (player) {
+                camera.x = player.x;
+                camera.y = player.y;
+                camera.scale = Math.max(0.3, Math.min(1, 30 / player.radius));
+            }
+        }
+        
+        // Draw grid
+        function drawGrid() {
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            
+            const gridSize = 50;
+            const startX = Math.floor((camera.x - canvas.width / 2 / camera.scale) / gridSize) * gridSize;
+            const startY = Math.floor((camera.y - canvas.height / 2 / camera.scale) / gridSize) * gridSize;
+            const endX = camera.x + canvas.width / 2 / camera.scale;
+            const endY = camera.y + canvas.height / 2 / camera.scale;
+            
+            for (let x = startX; x <= endX; x += gridSize) {
+                const screenX = (x - camera.x) * camera.scale + canvas.width / 2;
+                ctx.beginPath();
+                ctx.moveTo(screenX, 0);
+                ctx.lineTo(screenX, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = startY; y <= endY; y += gridSize) {
+                const screenY = (y - camera.y) * camera.scale + canvas.height / 2;
+                ctx.beginPath();
+                ctx.moveTo(0, screenY);
+                ctx.lineTo(canvas.width, screenY);
+                ctx.stroke();
+            }
+        }
+        
+        // Draw game
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            drawGrid();
+            
+            // Draw food
+            foods.forEach(food => {
+                const screenX = (food.x - camera.x) * camera.scale + canvas.width / 2;
+                const screenY = (food.y - camera.y) * camera.scale + canvas.height / 2;
+                const screenRadius = 5 * camera.scale;
+                
+                ctx.fillStyle = food.color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw viruses
+            viruses.forEach(virus => {
+                const screenX = (virus.x - camera.x) * camera.scale + canvas.width / 2;
+                const screenY = (virus.y - camera.y) * camera.scale + canvas.height / 2;
+                const screenRadius = Math.sqrt(virus.mass) * 2 * camera.scale;
+                
+                ctx.fillStyle = '#0f0';
+                ctx.strokeStyle = '#0a0';
+                ctx.lineWidth = 5;
+                
+                // Draw spiky circle
+                ctx.beginPath();
+                for (let i = 0; i < virus.spikes * 2; i++) {
+                    const angle = (i / (virus.spikes * 2)) * Math.PI * 2;
+                    const radius = i % 2 === 0 ? screenRadius : screenRadius * 0.7;
+                    const x = screenX + Math.cos(angle) * radius;
+                    const y = screenY + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            });
+            
+            // Draw ejected mass
+            ejectedMass.forEach(mass => {
+                const screenX = (mass.x - camera.x) * camera.scale + canvas.width / 2;
+                const screenY = (mass.y - camera.y) * camera.scale + canvas.height / 2;
+                const screenRadius = Math.sqrt(mass.mass) * 2 * camera.scale;
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw bots
+            bots.forEach(bot => {
+                bot.draw(ctx, camera.x, camera.y, camera.scale);
+            });
+            
+            // Draw player
+            if (player) {
+                player.draw(ctx, camera.x, camera.y, camera.scale);
+            }
+            
+            // Draw minimap
+            drawMinimap();
+            
+            // Update UI
+            updateUI();
+        }
+        
+        // Draw minimap
+        function drawMinimap() {
+            minimapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            minimapCtx.fillRect(0, 0, 150, 150);
+            
+            // Draw border
+            minimapCtx.strokeStyle = '#333';
+            minimapCtx.lineWidth = 2;
+            minimapCtx.strokeRect(0, 0, 150, 150);
+            
+            // Draw player on minimap
+            if (player) {
+                const x = (player.x / WORLD_WIDTH) * 150;
+                const y = (player.y / WORLD_HEIGHT) * 150;
+                
+                minimapCtx.fillStyle = 'white';
+                minimapCtx.beginPath();
+                minimapCtx.arc(x, y, 3, 0, Math.PI * 2);
+                minimapCtx.fill();
+            }
+            
+            // Draw bots on minimap
+            bots.forEach(bot => {
+                const x = (bot.x / WORLD_WIDTH) * 150;
+                const y = (bot.y / WORLD_HEIGHT) * 150;
+                
+                minimapCtx.fillStyle = 'red';
+                minimapCtx.beginPath();
+                minimapCtx.arc(x, y, 2, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+        }
+        
+        // Update UI
+        function updateUI() {
+            if (player) {
+                document.getElementById('score').textContent = `Mass: ${Math.floor(player.mass)}`;
+            }
+            
+            // Update leaderboard
+            const allCells = player ? [player, ...bots] : bots;
+            allCells.sort((a, b) => b.mass - a.mass);
+            
+            const leadersList = document.getElementById('leaders');
+            leadersList.innerHTML = '';
+            
+            allCells.slice(0, 5).forEach((cell, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${cell.name}: ${Math.floor(cell.mass)}`;
+                if (cell === player) {
+                    li.style.color = '#2ecc71';
+                }
+                leadersList.appendChild(li);
+            });
+        }
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Update player
+            if (player) {
+                const worldMouseX = (mouseX - canvas.width / 2) / camera.scale + camera.x;
+                const worldMouseY = (mouseY - canvas.height / 2) / camera.scale + camera.y;
+                
+                player.targetX = worldMouseX;
+                player.targetY = worldMouseY;
+                player.update();
+            }
+            
+            // Update ejected mass
+            ejectedMass = ejectedMass.filter(mass => {
+                mass.x += mass.velocity.x;
+                mass.y += mass.velocity.y;
+                mass.velocity.x *= 0.9;
+                mass.velocity.y *= 0.9;
+                mass.mass *= 0.99;
+                
+                return mass.mass > 0.5;
+            });
+            
+            updateBots();
+            handleCollisions();
+            updateCamera();
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Input handlers
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (!player || !gameRunning) return;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                const newCell = player.split();
+                if (newCell) {
+                    // For simplicity, we'll just increase mass instead of actual splitting
+                    player.mass *= 0.9;
+                }
+            } else if (e.key.toLowerCase() === 'w') {
+                const mass = player.ejectMass();
+                if (mass) {
+                    ejectedMass.push(mass);
+                }
+            }
+        });
+        
+        // Start game
+        function startGame() {
+            playerName = document.getElementById('playerName').value || 'Player';
+            document.getElementById('startMenu').style.display = 'none';
+            
+            gameRunning = true;
+            
+            // Initialize player
+            player = new Cell(
+                WORLD_WIDTH / 2,
+                WORLD_HEIGHT / 2,
+                10,
+                'hsla(200, 70%, 50%, 0.8)',
+                playerName
+            );
+            
+            initFood();
+            initViruses();
+            initBots();
+            
+            gameLoop();
+        }
+        
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = Math.floor(player.mass);
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        // Respawn
+        function respawn() {
+            document.getElementById('gameOver').style.display = 'none';
+            
+            // Reset player
+            player = new Cell(
+                Math.random() * WORLD_WIDTH,
+                Math.random() * WORLD_HEIGHT,
+                10,
+                'hsla(200, 70%, 50%, 0.8)',
+                playerName
+            );
+            
+            gameRunning = true;
+            gameLoop();
+        }
+    </script>
+</body>
+</html>

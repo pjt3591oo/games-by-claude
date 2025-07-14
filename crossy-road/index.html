@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crossy Road</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameContainer {
+            text-align: center;
+        }
+
+        #gameCanvas {
+            border: 2px solid #333;
+            background: #90EE90;
+            display: block;
+            margin: 0 auto;
+            image-rendering: pixelated;
+        }
+
+        #score {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        #gameOver {
+            display: none;
+            font-size: 20px;
+            color: #ff0000;
+            margin-top: 20px;
+        }
+
+        #startBtn {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        #startBtn:hover {
+            background-color: #45a049;
+        }
+
+        .controls {
+            margin-top: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div id="gameOver">
+            <p>Game Over!</p>
+            <p>Final Score: <span id="finalScore">0</span></p>
+        </div>
+        <button id="startBtn">Start Game</button>
+        <div class="controls">
+            <p>Use Arrow Keys or WASD to move</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+
+        const TILE_SIZE = 40;
+        const COLS = canvas.width / TILE_SIZE;
+        const ROWS = canvas.height / TILE_SIZE;
+
+        let gameRunning = false;
+        let score = 0;
+        let camera = 0;
+
+        // Player
+        const player = {
+            x: Math.floor(COLS / 2),
+            y: ROWS - 2,
+            targetX: Math.floor(COLS / 2),
+            targetY: ROWS - 2,
+            moving: false,
+            moveProgress: 0
+        };
+
+        // Game objects
+        let lanes = [];
+        let vehicles = [];
+        let logs = [];
+
+        // Lane types
+        const LANE_TYPES = {
+            SAFE: 'safe',
+            ROAD: 'road',
+            WATER: 'water',
+            RAIL: 'rail'
+        };
+
+        // Input handling
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            handlePlayerInput();
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Initialize lanes
+        function initLanes() {
+            lanes = [];
+            // Starting safe zone
+            for (let i = 0; i < 2; i++) {
+                lanes.push({ type: LANE_TYPES.SAFE, y: ROWS - 1 - i });
+            }
+
+            // Generate mixed lanes
+            for (let i = 2; i < 50; i++) {
+                const laneType = Math.random() < 0.5 ? LANE_TYPES.ROAD : 
+                               Math.random() < 0.7 ? LANE_TYPES.WATER : LANE_TYPES.SAFE;
+                lanes.push({ 
+                    type: laneType, 
+                    y: ROWS - 1 - i,
+                    speed: (Math.random() - 0.5) * 3,
+                    density: Math.random() * 0.3 + 0.1
+                });
+            }
+        }
+
+        // Generate vehicles and logs
+        function generateObjects() {
+            lanes.forEach((lane, index) => {
+                if (lane.type === LANE_TYPES.ROAD && Math.random() < lane.density * 0.1) {
+                    vehicles.push({
+                        x: lane.speed > 0 ? -2 : COLS + 2,
+                        y: lane.y,
+                        width: Math.floor(Math.random() * 2) + 2,
+                        speed: lane.speed,
+                        color: ['#FF0000', '#0000FF', '#FFFF00'][Math.floor(Math.random() * 3)]
+                    });
+                } else if (lane.type === LANE_TYPES.WATER && Math.random() < lane.density * 0.1) {
+                    logs.push({
+                        x: lane.speed > 0 ? -3 : COLS + 3,
+                        y: lane.y,
+                        width: Math.floor(Math.random() * 3) + 2,
+                        speed: lane.speed
+                    });
+                }
+            });
+        }
+
+        // Handle player input
+        function handlePlayerInput() {
+            if (!gameRunning || player.moving) return;
+
+            let newX = player.targetX;
+            let newY = player.targetY;
+
+            if (keys['arrowup'] || keys['w']) {
+                newY--;
+            } else if (keys['arrowdown'] || keys['s']) {
+                newY++;
+            } else if (keys['arrowleft'] || keys['a']) {
+                newX--;
+            } else if (keys['arrowright'] || keys['d']) {
+                newX++;
+            }
+
+            // Check bounds
+            if (newX >= 0 && newX < COLS && newY >= 0) {
+                player.targetX = newX;
+                player.targetY = newY;
+                player.moving = true;
+                player.moveProgress = 0;
+
+                // Update score for forward movement
+                if (newY < player.y) {
+                    const newScore = ROWS - 1 - newY;
+                    if (newScore > score) {
+                        score = newScore;
+                        scoreElement.textContent = `Score: ${score}`;
+                    }
+                }
+            }
+        }
+
+        // Update game state
+        function update() {
+            if (!gameRunning) return;
+
+            // Update player movement animation
+            if (player.moving) {
+                player.moveProgress += 0.2;
+                if (player.moveProgress >= 1) {
+                    player.x = player.targetX;
+                    player.y = player.targetY;
+                    player.moving = false;
+                    player.moveProgress = 0;
+                }
+            }
+
+            // Update vehicles
+            vehicles = vehicles.filter(vehicle => {
+                vehicle.x += vehicle.speed * 0.1;
+                return vehicle.x > -5 && vehicle.x < COLS + 5;
+            });
+
+            // Update logs
+            logs = logs.filter(log => {
+                log.x += log.speed * 0.1;
+                return log.x > -5 && log.x < COLS + 5;
+            });
+
+            // Check collisions
+            checkCollisions();
+
+            // Generate new objects
+            generateObjects();
+
+            // Update camera to follow player
+            const targetCamera = Math.max(0, (ROWS - 1 - player.y - 5) * TILE_SIZE);
+            camera += (targetCamera - camera) * 0.1;
+        }
+
+        // Check collisions
+        function checkCollisions() {
+            const playerX = player.moving ? 
+                player.x + (player.targetX - player.x) * player.moveProgress : player.x;
+            const playerY = player.moving ? 
+                player.y + (player.targetY - player.y) * player.moveProgress : player.y;
+
+            // Check vehicle collisions
+            for (let vehicle of vehicles) {
+                if (Math.abs(vehicle.y - playerY) < 0.5 &&
+                    playerX >= vehicle.x - 0.4 && 
+                    playerX <= vehicle.x + vehicle.width - 0.6) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Check water - need to be on a log
+            const currentLane = lanes.find(lane => Math.abs(lane.y - playerY) < 0.5);
+            if (currentLane && currentLane.type === LANE_TYPES.WATER) {
+                let onLog = false;
+                for (let log of logs) {
+                    if (Math.abs(log.y - playerY) < 0.5 &&
+                        playerX >= log.x - 0.4 && 
+                        playerX <= log.x + log.width - 0.6) {
+                        onLog = true;
+                        // Move with log
+                        if (!player.moving) {
+                            player.x += log.speed * 0.1;
+                            player.targetX = player.x;
+                        }
+                        break;
+                    }
+                }
+                if (!onLog) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Check if player went off screen
+            if (player.x < 0 || player.x >= COLS) {
+                gameOver();
+            }
+        }
+
+        // Draw everything
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(0, camera);
+
+            // Draw lanes
+            lanes.forEach(lane => {
+                const y = lane.y * TILE_SIZE;
+                switch (lane.type) {
+                    case LANE_TYPES.SAFE:
+                        ctx.fillStyle = '#90EE90';
+                        break;
+                    case LANE_TYPES.ROAD:
+                        ctx.fillStyle = '#696969';
+                        break;
+                    case LANE_TYPES.WATER:
+                        ctx.fillStyle = '#4682B4';
+                        break;
+                }
+                ctx.fillRect(0, y, canvas.width, TILE_SIZE);
+
+                // Draw lane markings for road
+                if (lane.type === LANE_TYPES.ROAD) {
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.setLineDash([20, 20]);
+                    ctx.beginPath();
+                    ctx.moveTo(0, y + TILE_SIZE / 2);
+                    ctx.lineTo(canvas.width, y + TILE_SIZE / 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            // Draw logs
+            ctx.fillStyle = '#8B4513';
+            logs.forEach(log => {
+                ctx.fillRect(log.x * TILE_SIZE, log.y * TILE_SIZE + 5, 
+                           log.width * TILE_SIZE, TILE_SIZE - 10);
+            });
+
+            // Draw vehicles
+            vehicles.forEach(vehicle => {
+                ctx.fillStyle = vehicle.color;
+                ctx.fillRect(vehicle.x * TILE_SIZE, vehicle.y * TILE_SIZE + 5, 
+                           vehicle.width * TILE_SIZE, TILE_SIZE - 10);
+            });
+
+            // Draw player
+            const playerX = player.moving ? 
+                player.x + (player.targetX - player.x) * player.moveProgress : player.x;
+            const playerY = player.moving ? 
+                player.y + (player.targetY - player.y) * player.moveProgress : player.y;
+
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(playerX * TILE_SIZE + 10, playerY * TILE_SIZE + 10, 
+                       TILE_SIZE - 20, TILE_SIZE - 20);
+
+            // Draw chicken features
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(playerX * TILE_SIZE + 15, playerY * TILE_SIZE + 5, 10, 10);
+            ctx.fillStyle = '#FFA500';
+            ctx.fillRect(playerX * TILE_SIZE + 15, playerY * TILE_SIZE + 20, 10, 5);
+
+            ctx.restore();
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Start game
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            camera = 0;
+            vehicles = [];
+            logs = [];
+            
+            player.x = Math.floor(COLS / 2);
+            player.y = ROWS - 2;
+            player.targetX = player.x;
+            player.targetY = player.y;
+            player.moving = false;
+            
+            scoreElement.textContent = 'Score: 0';
+            gameOverElement.style.display = 'none';
+            startBtn.style.display = 'none';
+            
+            initLanes();
+            gameLoop();
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            finalScoreElement.textContent = score;
+            gameOverElement.style.display = 'block';
+            startBtn.style.display = 'inline-block';
+            startBtn.textContent = 'Play Again';
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>

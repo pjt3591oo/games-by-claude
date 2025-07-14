@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Dash</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            text-align: center;
+            position: relative;
+        }
+
+        #gameCanvas {
+            border: 2px solid #0ff;
+            background: #111;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: #0ff;
+            font-weight: bold;
+            text-shadow: 0 0 10px #0ff;
+        }
+
+        #attempts {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 20px;
+            color: #ff0;
+            font-weight: bold;
+            text-shadow: 0 0 10px #ff0;
+        }
+
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #f00;
+            font-weight: bold;
+            text-shadow: 0 0 20px #f00;
+        }
+
+        #startBtn {
+            padding: 15px 30px;
+            font-size: 24px;
+            background: linear-gradient(45deg, #0ff, #f0f);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            transition: transform 0.3s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.1);
+        }
+
+        .controls {
+            margin-top: 20px;
+            color: #0ff;
+            text-shadow: 0 0 5px #0ff;
+        }
+
+        #bgMusic {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">0%</div>
+        <div id="attempts">Attempts: 0</div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="gameOver">GAME OVER!</div>
+        <button id="startBtn">Start Game</button>
+        <div class="controls">
+            <p>Press SPACE or Click to jump!</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const attemptsElement = document.getElementById('attempts');
+        const gameOverElement = document.getElementById('gameOver');
+        const startBtn = document.getElementById('startBtn');
+
+        let gameRunning = false;
+        let attempts = 0;
+        let camera = 0;
+        let levelLength = 5000;
+        let speed = 5;
+
+        // Player
+        const player = {
+            x: 100,
+            y: 300,
+            size: 30,
+            velocityY: 0,
+            rotation: 0,
+            isJumping: false,
+            isDead: false
+        };
+
+        // Level obstacles
+        let obstacles = [];
+        let particles = [];
+        let trail = [];
+
+        // Colors
+        const colors = ['#0ff', '#f0f', '#ff0', '#0f0', '#f00'];
+        let currentColorIndex = 0;
+
+        // Generate level
+        function generateLevel() {
+            obstacles = [];
+            
+            // Ground spikes
+            for (let x = 500; x < levelLength; x += 200 + Math.random() * 100) {
+                obstacles.push({
+                    type: 'spike',
+                    x: x,
+                    y: 330,
+                    width: 30,
+                    height: 30
+                });
+            }
+            
+            // Platforms
+            for (let x = 700; x < levelLength; x += 400 + Math.random() * 200) {
+                obstacles.push({
+                    type: 'platform',
+                    x: x,
+                    y: 250 + Math.random() * 50,
+                    width: 100 + Math.random() * 50,
+                    height: 20
+                });
+            }
+            
+            // Flying spikes
+            for (let x = 900; x < levelLength; x += 300 + Math.random() * 200) {
+                obstacles.push({
+                    type: 'spike',
+                    x: x,
+                    y: 200 + Math.random() * 100,
+                    width: 30,
+                    height: 30
+                });
+            }
+            
+            // Moving obstacles
+            for (let x = 1200; x < levelLength; x += 500 + Math.random() * 300) {
+                obstacles.push({
+                    type: 'moving',
+                    x: x,
+                    y: 300,
+                    width: 40,
+                    height: 40,
+                    originalY: 300,
+                    amplitude: 100,
+                    speed: 0.05
+                });
+            }
+        }
+
+        // Input handling
+        function jump() {
+            if (!gameRunning || player.isDead) return;
+            
+            if (!player.isJumping) {
+                player.velocityY = -12;
+                player.isJumping = true;
+                
+                // Create jump particles
+                for (let i = 0; i < 10; i++) {
+                    particles.push({
+                        x: player.x,
+                        y: player.y + player.size / 2,
+                        vx: (Math.random() - 0.5) * 5,
+                        vy: Math.random() * 3,
+                        size: Math.random() * 5 + 2,
+                        color: colors[currentColorIndex],
+                        lifetime: 30
+                    });
+                }
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump();
+            }
+        });
+
+        canvas.addEventListener('click', jump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+
+        // Update game
+        function update() {
+            if (!gameRunning || player.isDead) return;
+
+            // Update camera
+            camera += speed;
+            
+            // Update player
+            player.velocityY += 0.6; // Gravity
+            player.y += player.velocityY;
+            player.rotation += 0.2;
+            
+            // Ground collision
+            if (player.y > 300) {
+                player.y = 300;
+                player.velocityY = 0;
+                player.isJumping = false;
+                player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+            }
+            
+            // Add to trail
+            trail.push({
+                x: player.x,
+                y: player.y,
+                size: player.size,
+                alpha: 1
+            });
+            
+            if (trail.length > 20) {
+                trail.shift();
+            }
+            
+            // Update trail
+            trail.forEach(t => {
+                t.alpha *= 0.95;
+            });
+            
+            // Check collisions
+            for (let obstacle of obstacles) {
+                if (obstacle.type === 'moving') {
+                    obstacle.y = obstacle.originalY + Math.sin(Date.now() * obstacle.speed) * obstacle.amplitude;
+                }
+                
+                if (checkCollision(player, obstacle)) {
+                    if (obstacle.type === 'platform' && player.velocityY > 0) {
+                        // Land on platform
+                        if (player.y < obstacle.y) {
+                            player.y = obstacle.y - player.size / 2;
+                            player.velocityY = 0;
+                            player.isJumping = false;
+                        }
+                    } else if (obstacle.type !== 'platform') {
+                        // Hit obstacle
+                        gameOver();
+                    }
+                }
+            }
+            
+            // Update particles
+            particles = particles.filter(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vy += 0.3;
+                particle.lifetime--;
+                particle.size *= 0.95;
+                
+                return particle.lifetime > 0;
+            });
+            
+            // Change color periodically
+            if (camera % 500 === 0) {
+                currentColorIndex = (currentColorIndex + 1) % colors.length;
+            }
+            
+            // Update score
+            const progress = Math.min(100, Math.floor((camera / levelLength) * 100));
+            scoreElement.textContent = `${progress}%`;
+            
+            // Check win
+            if (camera >= levelLength) {
+                win();
+            }
+        }
+
+        // Check collision
+        function checkCollision(player, obstacle) {
+            const px = player.x - player.size / 2;
+            const py = player.y - player.size / 2;
+            
+            return px < obstacle.x + obstacle.width &&
+                   px + player.size > obstacle.x &&
+                   py < obstacle.y + obstacle.height &&
+                   py + player.size > obstacle.y;
+        }
+
+        // Draw everything
+        function draw() {
+            // Clear with fade effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(-camera, 0);
+            
+            // Draw ground
+            ctx.strokeStyle = colors[currentColorIndex];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 330);
+            ctx.lineTo(levelLength + 1000, 330);
+            ctx.stroke();
+            
+            // Draw grid background
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let x = Math.floor(camera / 50) * 50; x < camera + canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(camera, y);
+                ctx.lineTo(camera + canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // Draw obstacles
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = colors[currentColorIndex];
+                ctx.shadowColor = colors[currentColorIndex];
+                ctx.shadowBlur = 10;
+                
+                if (obstacle.type === 'spike') {
+                    // Draw triangle
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x + obstacle.width / 2, obstacle.y);
+                    ctx.lineTo(obstacle.x, obstacle.y + obstacle.height);
+                    ctx.lineTo(obstacle.x + obstacle.width, obstacle.y + obstacle.height);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Draw rectangle
+                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                }
+            });
+            
+            ctx.shadowBlur = 0;
+            
+            // Draw trail
+            trail.forEach((t, i) => {
+                ctx.fillStyle = colors[currentColorIndex] + Math.floor(t.alpha * 255).toString(16).padStart(2, '0');
+                ctx.fillRect(t.x - t.size / 2, t.y - t.size / 2, t.size, t.size);
+            });
+            
+            // Draw particles
+            particles.forEach(particle => {
+                ctx.fillStyle = particle.color;
+                ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+            });
+            
+            // Draw player
+            if (!player.isDead) {
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.rotation);
+                
+                ctx.fillStyle = colors[currentColorIndex];
+                ctx.shadowColor = colors[currentColorIndex];
+                ctx.shadowBlur = 20;
+                ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+                
+                ctx.restore();
+            }
+            
+            ctx.restore();
+            
+            // Draw progress bar
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+            
+            const progress = Math.min(1, camera / levelLength);
+            ctx.fillStyle = colors[currentColorIndex];
+            ctx.fillRect(0, canvas.height - 10, canvas.width * progress, 10);
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Start game
+        function startGame() {
+            gameRunning = true;
+            camera = 0;
+            attempts++;
+            
+            player.x = 100;
+            player.y = 300;
+            player.velocityY = 0;
+            player.rotation = 0;
+            player.isJumping = false;
+            player.isDead = false;
+            
+            particles = [];
+            trail = [];
+            currentColorIndex = 0;
+            
+            attemptsElement.textContent = `Attempts: ${attempts}`;
+            scoreElement.textContent = '0%';
+            gameOverElement.style.display = 'none';
+            startBtn.style.display = 'none';
+            
+            generateLevel();
+            gameLoop();
+        }
+
+        // Game over
+        function gameOver() {
+            player.isDead = true;
+            
+            // Explosion effect
+            for (let i = 0; i < 30; i++) {
+                particles.push({
+                    x: player.x,
+                    y: player.y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    size: Math.random() * 10 + 5,
+                    color: colors[currentColorIndex],
+                    lifetime: 60
+                });
+            }
+            
+            setTimeout(() => {
+                gameRunning = false;
+                gameOverElement.style.display = 'block';
+                startBtn.style.display = 'inline-block';
+                startBtn.textContent = 'Try Again';
+            }, 1000);
+        }
+
+        // Win
+        function win() {
+            gameRunning = false;
+            gameOverElement.textContent = 'LEVEL COMPLETE!';
+            gameOverElement.style.color = '#0f0';
+            gameOverElement.style.display = 'block';
+            startBtn.style.display = 'inline-block';
+            startBtn.textContent = 'Play Again';
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
